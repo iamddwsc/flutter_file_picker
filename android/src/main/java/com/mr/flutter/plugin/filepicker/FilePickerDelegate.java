@@ -41,7 +41,8 @@ public class FilePickerDelegate implements PluginRegistry.ActivityResultListener
     private boolean isMultipleSelection = false;
     private boolean loadDataToMemory = false;
     private String type;
-    private int compressionQuality=20;
+    private int compressionQuality = 20;
+    private boolean allowCompression = true;
     private String[] allowedExtensions;
     private EventChannel.EventSink eventSink;
 
@@ -76,11 +77,11 @@ public class FilePickerDelegate implements PluginRegistry.ActivityResultListener
                 this.dispatchEventStatus(true);
                 final Uri uri = data.getData();
                 if (uri != null) {
-                  String  path = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
+                    String path = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
                             .getAbsolutePath() + File.separator + FileUtils.getFileName(uri, this.activity);
                     try {
                         OutputStream outputStream = this.activity.getContentResolver().openOutputStream(uri);
-                        if(outputStream != null){
+                        if (outputStream != null) {
                             outputStream.write(bytes);
                             outputStream.flush();
                             outputStream.close();
@@ -119,13 +120,13 @@ public class FilePickerDelegate implements PluginRegistry.ActivityResultListener
                             final int count = data.getClipData().getItemCount();
                             int currentItem = 0;
                             while (currentItem < count) {
-                                 Uri currentUri = data.getClipData().getItemAt(currentItem).getUri();
+                                Uri currentUri = data.getClipData().getItemAt(currentItem).getUri();
 
-                                if (Objects.equals(type, "image/*") && compressionQuality > 0) {
+                                if (Objects.equals(type, "image/*") && allowCompression && compressionQuality > 0) {
                                     currentUri = FileUtils.compressImage(currentUri, compressionQuality, activity.getApplicationContext());
                                 }
                                 final FileInfo file = FileUtils.openFileStream(FilePickerDelegate.this.activity, currentUri, loadDataToMemory);
-                                if(file != null) {
+                                if (file != null) {
                                     files.add(file);
                                     Log.d(FilePickerDelegate.TAG, "[MultiFilePick] File #" + currentItem + " - URI: " + currentUri.getPath());
                                 }
@@ -136,7 +137,7 @@ public class FilePickerDelegate implements PluginRegistry.ActivityResultListener
                         } else if (data.getData() != null) {
                             Uri uri = data.getData();
 
-                            if (Objects.equals(type, "image/*") && compressionQuality > 0) {
+                            if (Objects.equals(type, "image/*") && allowCompression && compressionQuality > 0) {
                                 uri = FileUtils.compressImage(uri, compressionQuality, activity.getApplicationContext());
                             }
 
@@ -146,7 +147,7 @@ public class FilePickerDelegate implements PluginRegistry.ActivityResultListener
                                 Log.d(FilePickerDelegate.TAG, "[SingleFilePick] File URI:" + uri.toString());
                                 final String dirPath = FileUtils.getFullPathFromTreeUri(uri, activity);
 
-                                if(dirPath != null) {
+                                if (dirPath != null) {
                                     finishWithSuccess(dirPath);
                                 } else {
                                     finishWithError("unknown_path", "Failed to retrieve directory path.");
@@ -156,7 +157,7 @@ public class FilePickerDelegate implements PluginRegistry.ActivityResultListener
 
                             final FileInfo file = FileUtils.openFileStream(FilePickerDelegate.this.activity, uri, loadDataToMemory);
 
-                            if(file != null) {
+                            if (file != null) {
                                 files.add(file);
                             }
 
@@ -167,7 +168,7 @@ public class FilePickerDelegate implements PluginRegistry.ActivityResultListener
                                 finishWithError("unknown_path", "Failed to retrieve path.");
                             }
 
-                        } else if (data.getExtras() != null){
+                        } else if (data.getExtras() != null) {
                             Bundle bundle = data.getExtras();
                             if (bundle.keySet().contains("selectedItems")) {
                                 ArrayList<Parcelable> fileUris = getSelectedItems(bundle);
@@ -224,8 +225,8 @@ public class FilePickerDelegate implements PluginRegistry.ActivityResultListener
     }
 
     @SuppressWarnings("deprecation")
-    private ArrayList<Parcelable> getSelectedItems(Bundle bundle){
-        if(Build.VERSION.SDK_INT >= 33){
+    private ArrayList<Parcelable> getSelectedItems(Bundle bundle) {
+        if (Build.VERSION.SDK_INT >= 33) {
             return bundle.getParcelableArrayList("selectedItems", Parcelable.class);
         }
 
@@ -244,17 +245,18 @@ public class FilePickerDelegate implements PluginRegistry.ActivityResultListener
             intent = new Intent(Intent.ACTION_OPEN_DOCUMENT_TREE);
         } else {
             if (type.equals("image/*")) {
-                intent = new Intent(Intent.ACTION_PICK, android.provider.MediaStore.Images.Media.EXTERNAL_CONTENT_URI);
+                intent = new Intent(Intent.ACTION_OPEN_DOCUMENT);
+
             } else {
                 intent = new Intent(Intent.ACTION_GET_CONTENT);
-                intent.addCategory(Intent.CATEGORY_OPENABLE);
             }
+            intent.addCategory(Intent.CATEGORY_OPENABLE);
             final Uri uri = Uri.parse(Environment.getExternalStorageDirectory().getPath() + File.separator);
             Log.d(TAG, "Selected type " + type);
             intent.setDataAndType(uri, this.type);
             intent.setType(this.type);
             intent.putExtra(Intent.EXTRA_ALLOW_MULTIPLE, this.isMultipleSelection);
-            intent.putExtra("multi-pick", this.isMultipleSelection);
+           intent.putExtra("multi-pick", this.isMultipleSelection);
 
             if (type.contains(",")) {
                 allowedExtensions = type.split(",");
@@ -266,7 +268,14 @@ public class FilePickerDelegate implements PluginRegistry.ActivityResultListener
         }
 
         if (intent.resolveActivity(this.activity.getPackageManager()) != null) {
-            this.activity.startActivityForResult(intent, REQUEST_CODE);
+            PackageManager pm = this.activity.getPackageManager();
+            if (pm.queryIntentActivities(intent, 0).size() == 1) {
+                this.activity.startActivityForResult(intent, REQUEST_CODE);
+            } else {
+                Intent i = Intent.createChooser(intent, "Select app");
+                this.activity.startActivityForResult(i, REQUEST_CODE);
+            }
+//            this.activity.startActivityForResult(intent, REQUEST_CODE);
         } else {
             Log.e(TAG, "Can't find a valid activity to handle the request. Make sure you've a file explorer installed.");
             finishWithError("invalid_format_type", "Can't handle the provided file type.");
@@ -274,7 +283,7 @@ public class FilePickerDelegate implements PluginRegistry.ActivityResultListener
     }
 
     @SuppressWarnings("deprecation")
-    public void startFileExplorer(final String type, final boolean isMultipleSelection, final boolean withData, final String[] allowedExtensions, final int compressionQuality, final MethodChannel.Result result) {
+    public void startFileExplorer(final String type, final boolean isMultipleSelection, final boolean withData, final String[] allowedExtensions, final boolean allowCompression, final int compressionQuality, final MethodChannel.Result result) {
 
         if (!this.setPendingMethodCallAndResult(result)) {
             finishWithAlreadyActiveError(result);
@@ -284,8 +293,9 @@ public class FilePickerDelegate implements PluginRegistry.ActivityResultListener
         this.isMultipleSelection = isMultipleSelection;
         this.loadDataToMemory = withData;
         this.allowedExtensions = allowedExtensions;
-		this.compressionQuality=compressionQuality;
-     
+        this.compressionQuality = compressionQuality;
+        this.allowCompression = allowCompression;
+
         this.startFileExplorer();
     }
 
@@ -331,7 +341,7 @@ public class FilePickerDelegate implements PluginRegistry.ActivityResultListener
             if (data != null && !(data instanceof String)) {
                 final ArrayList<HashMap<String, Object>> files = new ArrayList<>();
 
-                for (FileInfo file : (ArrayList<FileInfo>)data) {
+                for (FileInfo file : (ArrayList<FileInfo>) data) {
                     files.add(file.toMap());
                 }
                 data = files;
@@ -354,7 +364,7 @@ public class FilePickerDelegate implements PluginRegistry.ActivityResultListener
 
     private void dispatchEventStatus(final boolean status) {
 
-        if(eventSink == null || type.equals("dir")) {
+        if (eventSink == null || type.equals("dir")) {
             return;
         }
 
