@@ -114,6 +114,7 @@ public class FilePickerPlugin implements MethodChannel.MethodCallHandler, Flutte
     private static boolean isMultipleSelection = false;
     private static boolean withData = false;
     private static int compressionQuality;
+    private static boolean allowCompression;
 
     @SuppressWarnings("unchecked")
     @Override
@@ -138,7 +139,7 @@ public class FilePickerPlugin implements MethodChannel.MethodCallHandler, Flutte
             String initialDirectory = (String) arguments.get("initialDirectory");
             String[] allowedExtensions = FileUtils.getMimeTypes((ArrayList<String>) arguments.get("allowedExtensions"));
             byte[] bytes = (byte[]) arguments.get("bytes");
-            this.delegate.saveFile(fileName, type, initialDirectory, allowedExtensions, bytes,result);
+            this.delegate.saveFile(fileName, type, initialDirectory, allowedExtensions, bytes, result);
             return;
         }
 
@@ -150,14 +151,15 @@ public class FilePickerPlugin implements MethodChannel.MethodCallHandler, Flutte
         } else if (fileType != "dir") {
             isMultipleSelection = (boolean) arguments.get("allowMultipleSelection");
             withData = (boolean) arguments.get("withData");
-            compressionQuality=(int) arguments.get("compressionQuality");
+            compressionQuality = (int) arguments.get("compressionQuality");
+            allowCompression = (boolean) arguments.get("allowCompression");
             allowedExtensions = FileUtils.getMimeTypes((ArrayList<String>) arguments.get("allowedExtensions"));
         }
 
         if (call.method != null && call.method.equals("custom") && (allowedExtensions == null || allowedExtensions.length == 0)) {
             result.error(TAG, "Unsupported filter. Make sure that you are only using the extension without the dot, (ie., jpg instead of .jpg). This could also have happened because you are using an unsupported file extension.  If the problem persists, you may want to consider using FileType.any instead.", null);
         } else {
-            this.delegate.startFileExplorer(fileType, isMultipleSelection, withData, allowedExtensions, compressionQuality,result);
+            this.delegate.startFileExplorer(fileType, isMultipleSelection, withData, allowedExtensions, allowCompression, compressionQuality, result);
         }
 
     }
@@ -258,13 +260,13 @@ public class FilePickerPlugin implements MethodChannel.MethodCallHandler, Flutte
         activityBinding.addActivityResultListener(this.delegate);
         this.lifecycle = FlutterLifecycleAdapter.getActivityLifecycle(activityBinding);
         this.lifecycle.addObserver(this.observer);
-    
+
     }
 
     private void tearDown() {
         this.activityBinding.removeActivityResultListener(this.delegate);
         this.activityBinding = null;
-        if(this.observer != null) {
+        if (this.observer != null) {
             this.lifecycle.removeObserver(this.observer);
             this.application.unregisterActivityLifecycleCallbacks(this.observer);
         }
