@@ -571,8 +571,9 @@ didPickDocumentsAtURLs:(NSArray<NSURL *> *)urls{
                         }
 
                         @try {
+                            NSString *originalFilename = result.itemProvider.suggestedName;
                             // Create unique filename in app_images directory
-                            NSString *filename = [NSString stringWithFormat:@"image_%@_%ld.%@",
+                            NSString *filename = originalFilename ?: [NSString stringWithFormat:@"image_%@_%ld.%@",
                                 [[NSUUID UUID] UUIDString],
                                 (long)[[NSDate date] timeIntervalSince1970],
                                 url.pathExtension.length > 0 ? url.pathExtension : @"jpg"];
